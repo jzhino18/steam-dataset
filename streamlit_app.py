@@ -2,14 +2,27 @@ import pandas as pd
 import streamlit as st
 
 st.set_page_config(page_title="Steam Price Dataset Explorer", page_icon="📊", layout="wide")
-st.title("DS 4420 Final Project")
-st.subheader("Predicting Steam Game Prices Using Machine Learning")
-st.write(
+st.markdown(
     """
-Use the top tabs to switch between:
-1) the full dashboard and
-2) dataset-based example games.
-"""
+<style>
+.hero-line {
+    font-size: 1.5rem;
+    font-weight: 600;
+    line-height: 1.25;
+    margin: 0 0 0.35rem 0;
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+st.markdown('<p class="hero-line">DS 4420 Final Project</p>', unsafe_allow_html=True)
+st.markdown(
+    '<p class="hero-line">Predicting Steam Game Prices Using Machine Learning</p>',
+    unsafe_allow_html=True,
+)
+st.markdown(
+    '<p class="hero-line">Use the top tabs to switch between: the full dashboard and dataset-based example games.</p>',
+    unsafe_allow_html=True,
 )
 
 FEATURE_GROUPS = {
@@ -238,6 +251,13 @@ div.stButton > button {
     margin: 0;
     border-radius: 4px;
     font-size: 0;
+}
+div[data-testid="stHorizontalBlock"] {
+    gap: 0.12rem !important;
+}
+div[data-testid="column"] {
+    padding-left: 0.05rem !important;
+    padding-right: 0.05rem !important;
 }
 div.stButton > button[kind="secondary"] {
     background: #000000;
@@ -479,6 +499,12 @@ with examples_tab:
     st.write(
         "This tab uses only rows from `steam_clean.csv`. "
         "Examples are selected from price extremes only, among games where `Positive > 0` and `Negative > 0`."
+    )
+    st.image(
+        "https://media.giphy.com/media/YnYgi93MEB9LkT0fIj/giphy.gif",
+        caption="Stardew Valley GIF",
+        use_container_width=False,
+        width=420,
     )
 
     if not {"Positive", "Negative"}.issubset(set(df.columns)):
