@@ -262,27 +262,27 @@ else:
     st.caption("Loaded from `data/manual_mlp_regressor_pred_vs_actual.csv`")
 
     if {"actual_price", "predicted_price"}.issubset(set(mlp_pred_df.columns)):
-        st.subheader("7) Our Model Accuracy For Games Above $3.20")
-        threshold = 3.2
+        st.subheader("7) Our Model Accuracy For Games Above $3.50")
+        threshold = 3.5
         above_threshold_df = mlp_pred_df[mlp_pred_df["actual_price"] > threshold].copy()
 
         if len(above_threshold_df) == 0:
-            st.info("No games in the prediction CSV have actual price above $3.20.")
+            st.info("No games in the prediction CSV have actual price above $3.50.")
         else:
             correct_above = int((above_threshold_df["predicted_price"] > threshold).sum())
             missed_above = int(len(above_threshold_df) - correct_above)
             accuracy_above = correct_above / len(above_threshold_df)
 
             acc_col_1, acc_col_2, acc_col_3 = st.columns(3)
-            acc_col_1.metric("Games with actual price > $3.20", f"{len(above_threshold_df):,}")
-            acc_col_2.metric("Correctly predicted as > $3.20", f"{correct_above:,}")
+            acc_col_1.metric("Games with actual price > $3.50", f"{len(above_threshold_df):,}")
+            acc_col_2.metric("Correctly predicted as > $3.50", f"{correct_above:,}")
             acc_col_3.metric("Accuracy for this group", f"{accuracy_above:.2%}")
 
             pie_df = pd.DataFrame(
                 {
                     "Outcome": [
-                        "Correctly predicted above $3.20",
-                        "Missed above-$3.20 games",
+                        "Correctly predicted above $3.50",
+                        "Missed above-$3.50 games",
                     ],
                     "Count": [correct_above, missed_above],
                 }
@@ -301,5 +301,5 @@ else:
             }
             st.vega_lite_chart(pie_df, pie_spec, use_container_width=True)
             st.caption(
-                "Definition used: among games with actual price > $3.20, a prediction is counted as correct when predicted price is also > $3.20."
+                "Definition used: among games with actual price > $3.50, a prediction is counted as correct when predicted price is also > $3.50."
             )
