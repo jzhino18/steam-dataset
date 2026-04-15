@@ -124,6 +124,24 @@ def build_selected_feature_status(df_columns, selected_features):
     return pd.DataFrame(rows)
 
 
+def format_feature_value(value):
+    try:
+        numeric_value = float(value)
+        return f"{numeric_value:.4f}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def build_game_profile_table(row, preferred_columns):
+    available_columns = [col for col in preferred_columns if col in row.index]
+    return pd.DataFrame(
+        {
+            "Feature": available_columns,
+            "Value": [format_feature_value(row[col]) for col in available_columns],
+        }
+    )
+
+
 try:
     df = load_data()
 except FileNotFoundError:
@@ -303,3 +321,49 @@ else:
             st.caption(
                 "Definition used: among games with actual price > $3.50, a prediction is counted as correct when predicted price is also > $3.50."
             )
+
+st.subheader("8) 200-Cube Dataset Explorer")
+st.write(
+    "Click a cube to open one game profile from the dataset. Cubes map to the first 200 rows in `steam_clean.csv`."
+)
+
+max_cubes = min(200, len(df))
+if "selected_cube_game_index" not in st.session_state:
+    st.session_state.selected_cube_game_index = 0
+
+cube_columns = 20
+for row_start in range(0, max_cubes, cube_columns):
+    cols = st.columns(cube_columns)
+    for offset, col in enumerate(cols):
+        idx = row_start + offset
+        if idx >= max_cubes:
+            continue
+        is_selected = st.session_state.selected_cube_game_index == idx
+        cube_label = "▣" if is_selected else "■"
+        with col:
+            if st.button(cube_label, key=f"cube_btn_{idx}", help=f"Dataset game row #{idx + 1}"):
+                st.session_state.selected_cube_game_index = idx
+
+selected_idx = st.session_state.selected_cube_game_index
+selected_game = df.iloc[selected_idx]
+st.markdown(f"**Selected dataset game row:** `{selected_idx + 1}`")
+
+general_feature_columns = [
+    "Price",
+    "Positive",
+    "Negative",
+    "Metacritic score",
+    "User score",
+    "Peak CCU",
+    "Recommendations",
+    "Average playtime forever",
+    "Achievements",
+    "Estimated owners",
+    "Required age",
+    "Windows",
+    "Mac",
+    "Linux",
+    "language_count",
+]
+profile_df = build_game_profile_table(selected_game, general_feature_columns)
+st.dataframe(profile_df, use_container_width=True, hide_index=True)
