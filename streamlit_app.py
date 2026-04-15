@@ -6,9 +6,10 @@ st.title("DS 4420 Final Project")
 st.subheader("Predicting Steam Game Prices Using Machine Learning")
 st.write(
     """
-    This app displays the cleaned Steam dataset used in your project and summarizes the
-    properties and feature groups defined in the README.
-    """
+Use the top tabs to switch between:
+1) the full dashboard and
+2) dataset-based example games.
+"""
 )
 
 FEATURE_GROUPS = {
@@ -76,14 +77,21 @@ def normalize_name(name: str) -> str:
     return "".join(ch for ch in str(name).lower() if ch.isalnum())
 
 
-@st.cache_data
-def load_data():
-    return pd.read_csv("data/steam_clean.csv")
+def format_feature_value(value):
+    try:
+        return f"{float(value):.4f}"
+    except (TypeError, ValueError):
+        return str(value)
 
 
-@st.cache_data
-def load_mlp_predictions():
-    return pd.read_csv("data/manual_mlp_regressor_pred_vs_actual.csv")
+def build_game_profile_table(row, preferred_columns):
+    available_columns = [col for col in preferred_columns if col in row.index]
+    return pd.DataFrame(
+        {
+            "Feature": available_columns,
+            "Value": [format_feature_value(row[col]) for col in available_columns],
+        }
+    )
 
 
 def build_feature_status(df_columns, feature_groups):
@@ -124,22 +132,48 @@ def build_selected_feature_status(df_columns, selected_features):
     return pd.DataFrame(rows)
 
 
-def format_feature_value(value):
-    try:
-        numeric_value = float(value)
-        return f"{numeric_value:.4f}"
-    except (TypeError, ValueError):
-        return str(value)
+def make_game_label(row_index, row):
+    possible_name_columns = ["name", "Name", "title", "Title", "game", "Game"]
+    for col in possible_name_columns:
+        if col in row.index and pd.notna(row[col]) and str(row[col]).strip():
+            return str(row[col])
+    if "appID" in row.index and pd.notna(row["appID"]):
+        try:
+            return f"App {int(float(row['appID']))}"
+        except (TypeError, ValueError):
+            return f"App {row['appID']}"
+    return f"Dataset Game #{row_index + 1}"
 
 
-def build_game_profile_table(row, preferred_columns):
-    available_columns = [col for col in preferred_columns if col in row.index]
-    return pd.DataFrame(
-        {
-            "Feature": available_columns,
-            "Value": [format_feature_value(row[col]) for col in available_columns],
-        }
+def build_dataset_game_description(row):
+    platforms = []
+    for col_name, label in [("Windows", "Windows"), ("Mac", "Mac"), ("Linux", "Linux")]:
+        if col_name in row.index:
+            try:
+                if float(row[col_name]) > 0:
+                    platforms.append(label)
+            except (TypeError, ValueError):
+                pass
+    platform_text = ", ".join(platforms) if platforms else "unknown platforms"
+    return (
+        "This entry shows strong review signal in the cleaned dataset. "
+        f"Positive={format_feature_value(row.get('Positive', 'N/A'))}, "
+        f"Negative={format_feature_value(row.get('Negative', 'N/A'))}, "
+        f"Peak CCU={format_feature_value(row.get('Peak CCU', 'N/A'))}, "
+        f"Average playtime forever={format_feature_value(row.get('Average playtime forever', 'N/A'))}. "
+        f"Platform support: {platform_text}. "
+        "These are transformed modeling values from `steam_clean.csv`."
     )
+
+
+@st.cache_data
+def load_data():
+    return pd.read_csv("data/steam_clean.csv")
+
+
+@st.cache_data
+def load_mlp_predictions():
+    return pd.read_csv("data/manual_mlp_regressor_pred_vs_actual.csv")
 
 
 try:
@@ -148,222 +182,279 @@ except FileNotFoundError:
     st.error("Could not find data/steam_clean.csv. Add the dataset file and rerun.")
     st.stop()
 
-st.subheader("1) Dataset Display")
-rows_to_show = st.slider("Rows to display", min_value=10, max_value=200, value=30, step=10)
-st.dataframe(df.head(rows_to_show), use_container_width=True, hide_index=True)
-st.caption("Loaded from `data/steam_clean.csv`")
+try:
+    mlp_pred_df = load_mlp_predictions()
+except FileNotFoundError:
+    mlp_pred_df = None
 
-st.subheader("2) Dataset Properties")
-prop_col_1, prop_col_2, prop_col_3 = st.columns(3)
-prop_col_1.metric("Rows", f"{len(df):,}")
-prop_col_2.metric("Columns", f"{len(df.columns):,}")
-prop_col_3.metric("Missing Values", f"{int(df.isna().sum().sum()):,}")
+main_tab, examples_tab = st.tabs(["Main Dashboard", "Dataset Game Examples"])
 
-if "Price" in df.columns:
-    price_col_1, price_col_2, price_col_3 = st.columns(3)
-    price_col_1.metric("Price Min (transformed)", f"{df['Price'].min():.4f}")
-    price_col_2.metric("Price Median (transformed)", f"{df['Price'].median():.4f}")
-    price_col_3.metric("Price Max (transformed)", f"{df['Price'].max():.4f}")
+with main_tab:
+    st.subheader("1) 200-Cube Dataset Explorer")
+    st.write(
+        "Click a cube to open one game profile from the dataset. "
+        "Cubes map to the first 200 rows in `steam_clean.csv`."
+    )
 
-st.markdown(
-    """
+    max_cubes = min(200, len(df))
+    if "selected_cube_game_index" not in st.session_state:
+        st.session_state.selected_cube_game_index = 0
+
+    cube_columns = 20
+    for row_start in range(0, max_cubes, cube_columns):
+        cols = st.columns(cube_columns)
+        for offset, col in enumerate(cols):
+            idx = row_start + offset
+            if idx >= max_cubes:
+                continue
+            is_selected = st.session_state.selected_cube_game_index == idx
+            cube_label = "▣" if is_selected else "■"
+            with col:
+                if st.button(cube_label, key=f"cube_btn_{idx}", help=f"Dataset row #{idx + 1}"):
+                    st.session_state.selected_cube_game_index = idx
+
+    selected_idx = st.session_state.selected_cube_game_index
+    selected_game = df.iloc[selected_idx]
+    selected_label = make_game_label(selected_idx, selected_game)
+    st.markdown(f"**Selected game:** {selected_label}  |  **Dataset row:** `{selected_idx + 1}`")
+
+    general_feature_columns = [
+        "appID",
+        "Price",
+        "Positive",
+        "Negative",
+        "Metacritic score",
+        "User score",
+        "Peak CCU",
+        "Recommendations",
+        "Average playtime forever",
+        "Achievements",
+        "Estimated owners",
+        "Required age",
+        "Windows",
+        "Mac",
+        "Linux",
+        "language_count",
+    ]
+    profile_df = build_game_profile_table(selected_game, general_feature_columns)
+    st.dataframe(profile_df, use_container_width=True, hide_index=True)
+
+    st.subheader("2) Dataset Display")
+    rows_to_show = st.slider(
+        "Rows to display", min_value=10, max_value=200, value=30, step=10, key="rows_display"
+    )
+    st.dataframe(df.head(rows_to_show), use_container_width=True, hide_index=True)
+    st.caption("Loaded from `data/steam_clean.csv`")
+
+    st.subheader("3) Dataset Properties")
+    prop_col_1, prop_col_2, prop_col_3 = st.columns(3)
+    prop_col_1.metric("Rows", f"{len(df):,}")
+    prop_col_2.metric("Columns", f"{len(df.columns):,}")
+    prop_col_3.metric("Missing Values", f"{int(df.isna().sum().sum()):,}")
+
+    if "Price" in df.columns:
+        price_col_1, price_col_2, price_col_3 = st.columns(3)
+        price_col_1.metric("Price Min (transformed)", f"{df['Price'].min():.4f}")
+        price_col_2.metric("Price Median (transformed)", f"{df['Price'].median():.4f}")
+        price_col_3.metric("Price Max (transformed)", f"{df['Price'].max():.4f}")
+
+    st.markdown(
+        """
 **Project Properties (from README)**
 - Goal: Predict Steam game price from content, quality, and engagement metrics.
 - Original source: Steam platform data scraped from the Steam API.
 - Modeling dataset in this repo: `steam_clean.csv` (40k+ rows).
 - Implemented methods: Manual MLP (NumPy) and Bayesian nonlinear regression (R + brms).
 """
-)
-
-st.subheader("3) Feature Groups From README")
-feature_status_df = build_feature_status(df.columns, FEATURE_GROUPS)
-st.dataframe(feature_status_df, use_container_width=True, hide_index=True)
-
-st.subheader("4) Selected Modeling Features")
-selected_status_df = build_selected_feature_status(df.columns, SELECTED_MODEL_FEATURES)
-st.dataframe(selected_status_df, use_container_width=True, hide_index=True)
-
-with st.expander("Show all columns present in steam_clean.csv"):
-    column_df = pd.DataFrame(
-        {"Column Name": df.columns, "Data Type": [str(dtype) for dtype in df.dtypes]}
     )
-    st.dataframe(column_df, use_container_width=True, hide_index=True)
 
-st.subheader("5) Methods Used In This Project")
+    st.subheader("4) Feature Groups From README")
+    feature_status_df = build_feature_status(df.columns, FEATURE_GROUPS)
+    st.dataframe(feature_status_df, use_container_width=True, hide_index=True)
 
-mlp_tab, bayes_tab = st.tabs(
-    ["Method 1: Manual MLP (Python/NumPy)", "Method 2: Bayesian Nonlinear Model (R/brms)"]
-)
+    st.subheader("5) Selected Modeling Features")
+    selected_status_df = build_selected_feature_status(df.columns, SELECTED_MODEL_FEATURES)
+    st.dataframe(selected_status_df, use_container_width=True, hide_index=True)
 
-with mlp_tab:
-    st.markdown(
-        """
+    with st.expander("Show all columns present in steam_clean.csv"):
+        column_df = pd.DataFrame(
+            {"Column Name": df.columns, "Data Type": [str(dtype) for dtype in df.dtypes]}
+        )
+        st.dataframe(column_df, use_container_width=True, hide_index=True)
+
+    st.subheader("6) Methods Used In This Project")
+    mlp_tab, bayes_tab = st.tabs(
+        ["Method 1: Manual MLP (Python/NumPy)", "Method 2: Bayesian Nonlinear Model (R/brms)"]
+    )
+
+    with mlp_tab:
+        st.markdown(
+            """
 **What it is**
-- A feedforward neural network implemented manually in NumPy (not using high-level deep learning frameworks).
-- Architecture used: one hidden layer with `H = 4` hidden units and ReLU activation.
-- Parameters are explicitly represented as `W1` (input-to-hidden weights) and `w2` (hidden-to-output weights).
+- A feedforward neural network implemented manually in NumPy.
+- One hidden layer (`H = 4`) with ReLU activation.
+- Parameters are `W1` (input to hidden) and `w2` (hidden to output).
 
 **How it was trained**
 - Data split: 80/20 train-test after shuffling.
 - Features: all columns except `Price`; target: `Price`.
-- Feature scaling: min-max scaling based on training set statistics.
-- Loss: mean squared error (MSE) on the transformed target.
-- Optimization: manual gradient descent over 500 epochs with learning rate `eta = 0.01`.
-- Training loop is sample-by-sample: forward pass (`x -> ReLU(W1^T x) -> w2^T h`), then hand-derived backprop gradients for both `W1` and `w2`.
+- Feature scaling: min-max scaling using training statistics.
+- Loss: mean squared error (MSE).
+- Optimization: manual gradient descent (`eta = 0.01`, `500` epochs).
+- Training loop computes forward pass and hand-derived backprop gradients for `W1` and `w2`.
 
 **Prediction and evaluation**
-- Forward pass: input -> hidden ReLU layer -> output price prediction.
-- Test metric: RMSE on the test set (`Test RMSE (log scale)` in notebook output).
-
-**Why this method helps**
-- Captures nonlinear relationships between gameplay/popularity features and price.
-- Provides a flexible baseline for comparison against probabilistic models.
+- Forward pass: `x -> ReLU(W1^T x) -> w2^T h`.
+- Evaluated with test RMSE.
 """
-    )
+        )
 
-with bayes_tab:
-    st.markdown(
-        """
+    with bayes_tab:
+        st.markdown(
+            """
 **What it is**
-- A Bayesian nonlinear regression model implemented in R using `brms`.
-- Target is modeled as `log_price = log(Price + 1)` with Gaussian likelihood.
+- A Bayesian nonlinear regression model implemented in R with `brms`.
+- Target modeled as `log_price = log(Price + 1)` under Gaussian likelihood.
 
-**How nonlinearity is modeled**
-- Uses smooth terms `s(...)` for key engagement features, including:
-  `Peak.CCU`, `Recommendations`, `Positive`, `Negative`,
-  `Average.playtime.forever`, and `Median.playtime.forever`.
-- Includes linear terms for additional predictors such as:
-  `Required.age`, `DiscountDLC.count`, `Windows`, `Mac`, `Linux`,
-  `Achievements`, and `language_count`.
-
-**Bayesian setup**
-- Weakly informative priors on intercept, coefficients, residual scale, and smooth-term scales.
-- Posterior estimated with MCMC through `brm(...)`.
-- Produces posterior predictive means and 95% credible intervals for each game price.
+**How it works**
+- Uses smooth terms `s(...)` for key engagement signals.
+- Includes linear terms for additional features.
+- Uses weakly informative priors and MCMC posterior inference.
 
 **Prediction and evaluation**
-- Posterior expected predictions are back-transformed with `exp(pred_log) - 1`.
-- Evaluation uses RMSE plus uncertainty intervals and residual diagnostics.
-
-**Why this method helps**
-- Captures nonlinear effects while also quantifying uncertainty in predictions.
-- Makes model interpretation stronger by showing confidence/credible bounds.
+- Back-transforms posterior predictions with `exp(pred_log) - 1`.
+- Reports RMSE and uncertainty intervals.
 """
-    )
+        )
 
-st.subheader("6) Manual MLP Predictions vs Actual (CSV Preview)")
+    st.subheader("7) Manual MLP Predictions vs Actual (CSV Preview)")
+    if mlp_pred_df is None:
+        st.warning(
+            "Could not find `data/manual_mlp_regressor_pred_vs_actual.csv` for the MLP preview."
+        )
+    else:
+        if {"actual_price", "predicted_price"}.issubset(set(mlp_pred_df.columns)):
+            rmse_preview = (
+                (mlp_pred_df["predicted_price"] - mlp_pred_df["actual_price"]) ** 2
+            ).mean() ** 0.5
+            mae_preview = (
+                mlp_pred_df["predicted_price"] - mlp_pred_df["actual_price"]
+            ).abs().mean()
 
-try:
-    mlp_pred_df = load_mlp_predictions()
-except FileNotFoundError:
-    st.warning(
-        "Could not find `data/manual_mlp_regressor_pred_vs_actual.csv` for the MLP prediction preview."
-    )
-else:
-    if {"actual_price", "predicted_price"}.issubset(set(mlp_pred_df.columns)):
-        rmse_preview = (
-            (mlp_pred_df["predicted_price"] - mlp_pred_df["actual_price"]) ** 2
-        ).mean() ** 0.5
-        mae_preview = (
-            mlp_pred_df["predicted_price"] - mlp_pred_df["actual_price"]
-        ).abs().mean()
+            preview_col_1, preview_col_2, preview_col_3 = st.columns(3)
+            preview_col_1.metric("Rows in prediction CSV", f"{len(mlp_pred_df):,}")
+            preview_col_2.metric("RMSE (from CSV)", f"{rmse_preview:.4f}")
+            preview_col_3.metric("MAE (from CSV)", f"{mae_preview:.4f}")
 
-        preview_col_1, preview_col_2, preview_col_3 = st.columns(3)
-        preview_col_1.metric("Rows in prediction CSV", f"{len(mlp_pred_df):,}")
-        preview_col_2.metric("RMSE (from CSV)", f"{rmse_preview:.4f}")
-        preview_col_3.metric("MAE (from CSV)", f"{mae_preview:.4f}")
+        preview_rows = st.slider(
+            "Rows to preview from prediction CSV",
+            min_value=10,
+            max_value=200,
+            value=30,
+            step=10,
+            key="pred_rows_display",
+        )
+        st.dataframe(mlp_pred_df.head(preview_rows), use_container_width=True, hide_index=True)
+        st.caption("Loaded from `data/manual_mlp_regressor_pred_vs_actual.csv`")
 
-    preview_rows = st.slider(
-        "Rows to preview from prediction CSV", min_value=10, max_value=200, value=30, step=10
-    )
-    st.dataframe(mlp_pred_df.head(preview_rows), use_container_width=True, hide_index=True)
-    st.caption("Loaded from `data/manual_mlp_regressor_pred_vs_actual.csv`")
+        if {"actual_price", "predicted_price"}.issubset(set(mlp_pred_df.columns)):
+            st.subheader("8) Our Model Accuracy For Games Above $3.50")
+            threshold = 3.5
+            above_threshold_df = mlp_pred_df[mlp_pred_df["actual_price"] > threshold].copy()
 
-    if {"actual_price", "predicted_price"}.issubset(set(mlp_pred_df.columns)):
-        st.subheader("7) Our Model Accuracy For Games Above $3.50")
-        threshold = 3.5
-        above_threshold_df = mlp_pred_df[mlp_pred_df["actual_price"] > threshold].copy()
+            if len(above_threshold_df) == 0:
+                st.info("No games in the prediction CSV have actual price above $3.50.")
+            else:
+                correct_above = int((above_threshold_df["predicted_price"] > threshold).sum())
+                missed_above = int(len(above_threshold_df) - correct_above)
+                accuracy_above = correct_above / len(above_threshold_df)
 
-        if len(above_threshold_df) == 0:
-            st.info("No games in the prediction CSV have actual price above $3.50.")
-        else:
-            correct_above = int((above_threshold_df["predicted_price"] > threshold).sum())
-            missed_above = int(len(above_threshold_df) - correct_above)
-            accuracy_above = correct_above / len(above_threshold_df)
+                acc_col_1, acc_col_2, acc_col_3 = st.columns(3)
+                acc_col_1.metric("Games with actual price > $3.50", f"{len(above_threshold_df):,}")
+                acc_col_2.metric("Correctly predicted as > $3.50", f"{correct_above:,}")
+                acc_col_3.metric("Accuracy for this group", f"{accuracy_above:.2%}")
 
-            acc_col_1, acc_col_2, acc_col_3 = st.columns(3)
-            acc_col_1.metric("Games with actual price > $3.50", f"{len(above_threshold_df):,}")
-            acc_col_2.metric("Correctly predicted as > $3.50", f"{correct_above:,}")
-            acc_col_3.metric("Accuracy for this group", f"{accuracy_above:.2%}")
+                pie_df = pd.DataFrame(
+                    {
+                        "Outcome": [
+                            "Correctly predicted above $3.50",
+                            "Missed above-$3.50 games",
+                        ],
+                        "Count": [correct_above, missed_above],
+                    }
+                )
 
-            pie_df = pd.DataFrame(
-                {
-                    "Outcome": [
-                        "Correctly predicted above $3.50",
-                        "Missed above-$3.50 games",
-                    ],
-                    "Count": [correct_above, missed_above],
+                pie_spec = {
+                    "mark": {"type": "arc", "innerRadius": 45},
+                    "encoding": {
+                        "theta": {"field": "Count", "type": "quantitative"},
+                        "color": {"field": "Outcome", "type": "nominal"},
+                        "tooltip": [
+                            {"field": "Outcome", "type": "nominal"},
+                            {"field": "Count", "type": "quantitative"},
+                        ],
+                    },
                 }
-            )
+                st.vega_lite_chart(pie_df, pie_spec, use_container_width=True)
+                st.caption(
+                    "Definition used: among games with actual price > $3.50, "
+                    "a prediction is counted as correct when predicted price is also > $3.50."
+                )
 
-            pie_spec = {
-                "mark": {"type": "arc", "innerRadius": 45},
-                "encoding": {
-                    "theta": {"field": "Count", "type": "quantitative"},
-                    "color": {"field": "Outcome", "type": "nominal"},
-                    "tooltip": [
-                        {"field": "Outcome", "type": "nominal"},
-                        {"field": "Count", "type": "quantitative"},
-                    ],
-                },
-            }
-            st.vega_lite_chart(pie_df, pie_spec, use_container_width=True)
-            st.caption(
-                "Definition used: among games with actual price > $3.50, a prediction is counted as correct when predicted price is also > $3.50."
-            )
+with examples_tab:
+    st.subheader("Dataset-Based Example Games")
+    st.write(
+        "This tab uses only rows from `steam_clean.csv`. "
+        "The five examples below are selected by strongest review signal."
+    )
 
-st.subheader("8) 200-Cube Dataset Explorer")
-st.write(
-    "Click a cube to open one game profile from the dataset. Cubes map to the first 200 rows in `steam_clean.csv`."
-)
+    if not {"Positive", "Negative"}.issubset(set(df.columns)):
+        st.error("`steam_clean.csv` must contain `Positive` and `Negative` to rank examples.")
+        st.stop()
 
-max_cubes = min(200, len(df))
-if "selected_cube_game_index" not in st.session_state:
-    st.session_state.selected_cube_game_index = 0
+    ranked_df = df.copy()
+    ranked_df["review_signal"] = ranked_df["Positive"] - ranked_df["Negative"]
 
-cube_columns = 20
-for row_start in range(0, max_cubes, cube_columns):
-    cols = st.columns(cube_columns)
-    for offset, col in enumerate(cols):
-        idx = row_start + offset
-        if idx >= max_cubes:
-            continue
-        is_selected = st.session_state.selected_cube_game_index == idx
-        cube_label = "▣" if is_selected else "■"
-        with col:
-            if st.button(cube_label, key=f"cube_btn_{idx}", help=f"Dataset game row #{idx + 1}"):
-                st.session_state.selected_cube_game_index = idx
+    sort_cols = ["review_signal"]
+    if "Metacritic score" in ranked_df.columns:
+        sort_cols.append("Metacritic score")
+    if "User score" in ranked_df.columns:
+        sort_cols.append("User score")
 
-selected_idx = st.session_state.selected_cube_game_index
-selected_game = df.iloc[selected_idx]
-st.markdown(f"**Selected dataset game row:** `{selected_idx + 1}`")
+    top_games = ranked_df.sort_values(by=sort_cols, ascending=False).head(5).copy()
+    top_games["Dataset Row"] = top_games.index + 1
+    top_games["Game"] = [make_game_label(idx, top_games.loc[idx]) for idx in top_games.index]
 
-general_feature_columns = [
-    "Price",
-    "Positive",
-    "Negative",
-    "Metacritic score",
-    "User score",
-    "Peak CCU",
-    "Recommendations",
-    "Average playtime forever",
-    "Achievements",
-    "Estimated owners",
-    "Required age",
-    "Windows",
-    "Mac",
-    "Linux",
-    "language_count",
-]
-profile_df = build_game_profile_table(selected_game, general_feature_columns)
-st.dataframe(profile_df, use_container_width=True, hide_index=True)
+    display_columns = ["Dataset Row", "Game", "review_signal"]
+    for col in ["Price", "Positive", "Negative", "Metacritic score", "Peak CCU"]:
+        if col in top_games.columns:
+            display_columns.append(col)
+
+    st.dataframe(top_games[display_columns], use_container_width=True, hide_index=True)
+
+    st.subheader("Descriptions (Generated from Dataset Features)")
+    detail_columns = [
+        "Price",
+        "Positive",
+        "Negative",
+        "Metacritic score",
+        "User score",
+        "Peak CCU",
+        "Recommendations",
+        "Average playtime forever",
+        "Achievements",
+        "Estimated owners",
+        "Windows",
+        "Mac",
+        "Linux",
+    ]
+
+    for idx, row in top_games.iterrows():
+        game_label = row["Game"]
+        with st.expander(game_label):
+            st.write(build_dataset_game_description(row))
+            feature_rows = []
+            for col in detail_columns:
+                if col in top_games.columns:
+                    feature_rows.append({"Feature": col, "Value": format_feature_value(row[col])})
+            st.dataframe(pd.DataFrame(feature_rows), use_container_width=True, hide_index=True)
