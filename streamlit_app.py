@@ -250,30 +250,34 @@ st.markdown(
 div.stButton > button {
     width: 100%;
     aspect-ratio: 1 / 1;
-    min-height: 10px;
-    padding: 0;
-    margin: 0;
-    border-radius: 2px;
+    min-height: 0 !important;
+    height: auto;
+    padding: 0 !important;
+    margin: 0 !important;
+    border-radius: 0;
+    box-sizing: border-box;
+    line-height: 0 !important;
     font-size: 0;
 }
 div[data-testid="stHorizontalBlock"] {
-    gap: 0.02rem !important;
+    gap: 0 !important;
 }
 div[data-testid="column"] {
-    padding-left: 0.01rem !important;
-    padding-right: 0.01rem !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
 }
 div.stButton > button[kind="secondary"] {
     background: #000000;
-    border: 1px solid #1f1f1f;
+    border: 1px solid #232323;
 }
 div.stButton > button[kind="secondary"]:hover {
     background: #111111;
-    border: 1px solid #3a3a3a;
+    border: 1px solid #4a4a4a;
 }
 div.stButton > button[kind="primary"] {
     background: #000000;
-    border: 2px solid #ffffff;
+    border: 1px solid #232323;
+    box-shadow: inset 0 0 0 1px #ffffff;
 }
 </style>
 """,
