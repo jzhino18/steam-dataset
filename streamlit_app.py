@@ -156,7 +156,7 @@ def build_dataset_game_description(row):
                 pass
     platform_text = ", ".join(platforms) if platforms else "unknown platforms"
     return (
-        "This entry shows strong review signal in the cleaned dataset. "
+        "This entry comes from the cleaned dataset slice used for price-extreme examples. "
         f"Positive={format_feature_value(row.get('Positive', 'N/A'))}, "
         f"Negative={format_feature_value(row.get('Negative', 'N/A'))}, "
         f"Peak CCU={format_feature_value(row.get('Peak CCU', 'N/A'))}, "
@@ -164,6 +164,45 @@ def build_dataset_game_description(row):
         f"Platform support: {platform_text}. "
         "These are transformed modeling values from `steam_clean.csv`."
     )
+
+
+def select_price_extreme_games(df, total_examples=5):
+    candidate_df = df.copy()
+    candidate_df["price_num"] = pd.to_numeric(candidate_df.get("Price"), errors="coerce")
+    candidate_df["positive_num"] = pd.to_numeric(candidate_df.get("Positive"), errors="coerce")
+    candidate_df["negative_num"] = pd.to_numeric(candidate_df.get("Negative"), errors="coerce")
+
+    candidate_df = candidate_df[
+        (candidate_df["price_num"].notna())
+        & (candidate_df["positive_num"] > 0)
+        & (candidate_df["negative_num"] > 0)
+    ].copy()
+
+    if candidate_df.empty:
+        return candidate_df
+
+    low_count = (total_examples + 1) // 2
+    high_count = total_examples - low_count
+
+    lowest = candidate_df.nsmallest(low_count, "price_num").copy()
+    highest = candidate_df.nlargest(high_count, "price_num").copy()
+
+    lowest["Price Segment"] = "Lowest-price extreme"
+    highest["Price Segment"] = "Highest-price extreme"
+
+    selected = pd.concat([lowest, highest]).drop_duplicates()
+    if len(selected) < total_examples:
+        remaining = candidate_df.drop(selected.index, errors="ignore")
+        needed = total_examples - len(selected)
+        filler = remaining.nsmallest(needed, "price_num")
+        filler = filler.copy()
+        filler["Price Segment"] = "Lowest-price extreme"
+        selected = pd.concat([selected, filler]).drop_duplicates()
+
+    selected["Dataset Row"] = selected.index + 1
+    selected["Game"] = [make_game_label(idx, selected.loc[idx]) for idx in selected.index]
+    selected = selected.sort_values(by=["Price Segment", "price_num"], ascending=[True, True])
+    return selected.head(total_examples)
 
 
 @st.cache_data
@@ -187,6 +226,36 @@ try:
 except FileNotFoundError:
     mlp_pred_df = None
 
+# Custom styling for a cleaner black square grid in the cube explorer.
+st.markdown(
+    """
+<style>
+div.stButton > button {
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    min-height: 26px;
+    padding: 0;
+    margin: 0;
+    border-radius: 4px;
+    font-size: 0;
+}
+div.stButton > button[kind="secondary"] {
+    background: #000000;
+    border: 1px solid #1f1f1f;
+}
+div.stButton > button[kind="secondary"]:hover {
+    background: #111111;
+    border: 1px solid #3a3a3a;
+}
+div.stButton > button[kind="primary"] {
+    background: #000000;
+    border: 2px solid #ffffff;
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
 main_tab, examples_tab = st.tabs(["Main Dashboard", "Dataset Game Examples"])
 
 with main_tab:
@@ -202,15 +271,19 @@ with main_tab:
 
     cube_columns = 20
     for row_start in range(0, max_cubes, cube_columns):
-        cols = st.columns(cube_columns)
+        cols = st.columns(cube_columns, gap="small")
         for offset, col in enumerate(cols):
             idx = row_start + offset
             if idx >= max_cubes:
                 continue
             is_selected = st.session_state.selected_cube_game_index == idx
-            cube_label = "▣" if is_selected else "■"
             with col:
-                if st.button(cube_label, key=f"cube_btn_{idx}", help=f"Dataset row #{idx + 1}"):
+                if st.button(
+                    " ",
+                    key=f"cube_btn_{idx}",
+                    help=f"Dataset row #{idx + 1}",
+                    type="primary" if is_selected else "secondary",
+                ):
                     st.session_state.selected_cube_game_index = idx
 
     selected_idx = st.session_state.selected_cube_game_index
@@ -405,28 +478,22 @@ with examples_tab:
     st.subheader("Dataset-Based Example Games")
     st.write(
         "This tab uses only rows from `steam_clean.csv`. "
-        "The five examples below are selected by strongest review signal."
+        "Examples are selected from price extremes only, among games where `Positive > 0` and `Negative > 0`."
     )
 
     if not {"Positive", "Negative"}.issubset(set(df.columns)):
-        st.error("`steam_clean.csv` must contain `Positive` and `Negative` to rank examples.")
+        st.error("`steam_clean.csv` must contain `Positive` and `Negative` to build this view.")
         st.stop()
 
-    ranked_df = df.copy()
-    ranked_df["review_signal"] = ranked_df["Positive"] - ranked_df["Negative"]
+    top_games = select_price_extreme_games(df, total_examples=5)
+    if top_games.empty:
+        st.warning(
+            "No rows match the required filter (`Positive > 0` and `Negative > 0` with valid `Price`)."
+        )
+        st.stop()
 
-    sort_cols = ["review_signal"]
-    if "Metacritic score" in ranked_df.columns:
-        sort_cols.append("Metacritic score")
-    if "User score" in ranked_df.columns:
-        sort_cols.append("User score")
-
-    top_games = ranked_df.sort_values(by=sort_cols, ascending=False).head(5).copy()
-    top_games["Dataset Row"] = top_games.index + 1
-    top_games["Game"] = [make_game_label(idx, top_games.loc[idx]) for idx in top_games.index]
-
-    display_columns = ["Dataset Row", "Game", "review_signal"]
-    for col in ["Price", "Positive", "Negative", "Metacritic score", "Peak CCU"]:
+    display_columns = ["Dataset Row", "Game", "Price Segment", "Price", "Positive", "Negative"]
+    for col in ["Metacritic score", "Peak CCU", "Recommendations"]:
         if col in top_games.columns:
             display_columns.append(col)
 
@@ -452,7 +519,13 @@ with examples_tab:
     for idx, row in top_games.iterrows():
         game_label = row["Game"]
         with st.expander(game_label):
-            st.write(build_dataset_game_description(row))
+            st.write(
+                f"This is a **{row['Price Segment']}** example with non-zero positive and negative values. "
+                f"Price={format_feature_value(row.get('Price', 'N/A'))}, "
+                f"Positive={format_feature_value(row.get('Positive', 'N/A'))}, "
+                f"Negative={format_feature_value(row.get('Negative', 'N/A'))}. "
+                + build_dataset_game_description(row)
+            )
             feature_rows = []
             for col in detail_columns:
                 if col in top_games.columns:
