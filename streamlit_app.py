@@ -250,18 +250,18 @@ st.markdown(
 div.stButton > button {
     width: 100%;
     aspect-ratio: 1 / 1;
-    min-height: 26px;
+    min-height: 10px;
     padding: 0;
     margin: 0;
-    border-radius: 4px;
+    border-radius: 2px;
     font-size: 0;
 }
 div[data-testid="stHorizontalBlock"] {
-    gap: 0.12rem !important;
+    gap: 0.02rem !important;
 }
 div[data-testid="column"] {
-    padding-left: 0.05rem !important;
-    padding-right: 0.05rem !important;
+    padding-left: 0.01rem !important;
+    padding-right: 0.01rem !important;
 }
 div.stButton > button[kind="secondary"] {
     background: #000000;
