@@ -9,7 +9,11 @@ st.markdown(
     font-size: 1.5rem;
     font-weight: 600;
     line-height: 1.25;
-    margin: 0 0 0.35rem 0;
+    margin: 0 0 0.5rem 0;
+    border: 2px solid #1f1f1f;
+    border-radius: 10px;
+    padding: 0.6rem 0.85rem;
+    background: #fafafa;
 }
 </style>
 """,
