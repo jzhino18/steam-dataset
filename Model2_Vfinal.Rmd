@@ -1,0 +1,169 @@
+---
+title: "DS4420 - Steam Game Price Prediction: Bayesian Linear Regression"
+author: "Gianna Saw and Jason Zheng" 
+date: "2026-04-16"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+## Packages + Load Data
+```{r setup}
+library(MCMCpack)
+library(ggplot2)
+
+steam_df <- read.csv("steam_clean_v2.csv")
+```
+
+## Data
+
+```{r data}
+# cleaning col names --> csv files have been reading it weirdly in r
+names(steam_df) <- tolower(names(steam_df))
+names(steam_df) <- gsub("\\.", "_", names(steam_df))
+
+# print out col names, just makign sure
+colnames(steam_df)
+
+# checking price var
+summary(steam_df$price)
+
+# creating price tiers, on the log scale (follows my preprocessing file)
+steam_df$price_tier <- cut(
+  steam_df$price,
+  breaks = c(-Inf, log(0 + 1), log(5 + 1), log(15 + 1), log(30 + 1), Inf),
+  labels = c("Free", "Low", "Mid", "High", "Premium"),
+  right = TRUE
+)
+
+steam_df$price_tier <- as.factor(steam_df$price_tier)
+
+# needed variables 
+keep_vars <- c("price_tier", "peak_ccu", "recommendations", "positive", "negative")
+keep_vars <- keep_vars[keep_vars %in% names(steam_df)]
+
+steam_df <- steam_df[complete.cases(steam_df[, keep_vars]), ]
+
+# running other summaries, for research paper enhancement: 
+# data summary 
+table(steam_df$price_tier)
+prop.table(table(steam_df$price_tier))
+
+
+# Train / test split (80/20)
+set.seed(123)
+
+n <- nrow(steam_df)
+train_index <- sample(1:n, size = round(0.8 * n))
+
+train_df <- steam_df[train_index, ]
+test_df  <- steam_df[-train_index, ]
+
+#  Bayesian Multinomial Logistic Regression using MCMC package 
+# source: https://cran.r-project.org/web/packages/mcmc/mcmc.pdf
+bayes_model <- MCMCmnl(
+  price_tier ~ peak_ccu + recommendations + positive + negative +
+             metacritic_score + achievements + average_playtime_forever + language_count,
+  data = train_df,
+  mcmc = 5000,
+  burnin = 1000,
+  thin = 5,
+  verbose = 0
+)
+
+summary(bayes_model)
+```
+
+## Multinomial model, predicting on test set, confusion matrix 
+```{r}
+library(nnet)
+
+
+# dropping the free tier model beccause we purposely removed this in preprocessing
+train_df$price_tier <- droplevels(train_df$price_tier)
+test_df$price_tier  <- droplevels(test_df$price_tier)
+
+# multinomial model 
+multinom_model <- multinom(
+  price_tier ~ peak_ccu + recommendations + positive + negative +
+             metacritic_score + achievements + average_playtime_forever + language_count,
+  data = train_df,
+  trace = FALSE
+)
+# predicting on test set 
+pred_class <- predict(multinom_model, newdata = test_df)
+
+# confusion matrix
+conf_mat <- table(
+  Predicted = pred_class,
+  Actual = test_df$price_tier
+)
+
+conf_mat
+
+
+```
+
+## accuracy  
+```{r Accuracy }
+accuracy <- mean(pred_class == test_df$price_tier)
+accuracy
+```
+
+## Class-wise accuracy 
+```{r}
+prop.table(conf_mat, margin = 2)
+```
+
+## Plots 
+```{r}
+# Plot 1: Confusion matrix 
+
+library(reshape2)
+
+conf_prop <- prop.table(conf_mat, margin = 2)
+conf_df <- as.data.frame(conf_prop)
+
+ggplot(conf_df, aes(x = Predicted, y = Actual, fill = Freq)) +
+  geom_tile() +
+  geom_text(aes(label = round(Freq, 2))) +
+  scale_fill_gradient(low = "white", high = "steelblue") +
+  labs(
+    title = "Confusion Matrix (Proportions)",
+    x = "Predicted",
+    y = "Actual"
+  )
+
+# Plot 2: Distribution of log-scaled game prices shows that it is skewed towards lower priced games 
+ggplot(steam_df, aes(x = price)) +
+  geom_histogram(bins = 50) +
+  labs(
+    title = "Distribution of Log-Scaled Game Prices",
+    x = "Log(Price + 1)",
+    y = "Count"
+  )
+
+# Plot 3: 
+ggplot(plot_df, aes(x = Tier, fill = Type)) +
+  geom_bar(position = "fill") +
+  labs(
+    title = "Actual vs Predicted Distribution (Proportion)",
+    x = "Price Tier",
+    y = "Proportion"
+  )
+
+# Plot 4: Probablity confidence -- how confident we are with model 
+pred_probs <- predict(multinom_model, newdata = test_df, type = "probs")
+
+max_prob <- apply(pred_probs, 1, max)
+
+ggplot(data.frame(max_prob), aes(x = max_prob)) +
+  geom_histogram(bins = 30) +
+  labs(
+    title = "Prediction Confidence Distribution",
+    x = "Max Predicted Probability",
+    y = "Count"
+  )
+```
+
+
