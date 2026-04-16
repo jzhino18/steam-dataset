@@ -496,27 +496,24 @@ with examples_tab:
 with future_tab:
     st.subheader("Future Enhancements from Lecture Ideas + Code Walkthrough")
     st.write(
-        "This section is meant to feel like the natural continuation of your `Dataset Game Examples` discussion: "
-        "we looked at concrete rows from the Steam dataset, saw how mixed review profiles and engagement signals vary across price extremes, "
-        "and now we can describe exactly what we would improve next in the modeling workflow."
+        "This section is designed as a direct continuation of `Dataset Game Examples`: "
+        "we first grounded the analysis in real rows from the table, then moved into what those rows imply for the next model iteration."
     )
     st.write(
-        "At a high level, your current pipeline is already a strong proof of concept. "
-        "You tested both neural-network and Bayesian approaches, and you surfaced a key market insight: "
-        "Steam pricing behaves like a multi-regime problem, where low-price and premium games often follow different dynamics. "
-        "So the most practical enhancements are not random architecture changes; they are targeted upgrades that improve stability, generalization, and interpretability."
+        "At a high level, the current pipeline is a strong proof of concept. "
+        "The workflow already includes both neural-network and Bayesian modeling, and it already captures one key market insight: "
+        "Steam pricing behaves like a multi-regime system, where low-price, high-price, and premium behavior can diverge."
     )
     st.write(
-        "The lecture-aligned priority list is: better regularization control, better optimization strategy, and better uncertainty communication. "
-        "That is exactly where your current code is ready to grow."
+        "From a lecture-aligned perspective, the next improvements should focus on three concrete priorities: "
+        "regularization control, optimization strategy, and uncertainty communication."
     )
     st.write(
         "A good first improvement is to tune regularization more systematically. "
-        "You already have L2 integrated in the manual MLP training loop, which is great because it is exactly what helps reduce weight explosion and overfitting in noisy feature spaces. "
-        "In other words, you are already using the right mechanism; now it is mostly about tuning it more intentionally by segment."
+        "L2 is already integrated in the manual MLP training loop, and that is exactly the mechanism that helps prevent unstable growth in weights and overfitting in noisy feature spaces."
     )
 
-    st.markdown("**Python snippet: L2 regularization in your manual MLP (from Model1 workflow)**")
+    st.markdown("**Python snippet: L2 regularization in the manual MLP (Model 1 workflow)**")
     st.code(
         """def train_manual_mlp_regressor(
     x_train, y_train, x_val, y_val,
@@ -531,16 +528,22 @@ with future_tab:
         language="python",
     )
     st.write(
-        "Lecture-wise, this is the exact pattern we usually want: regularize the weight matrices directly in each gradient step. "
-        "A practical enhancement is to run a compact sweep on `l2` (for example `1e-5`, `1e-4`, `1e-3`) and compare validation RMSE by segment."
+        "This is the exact lecture pattern we usually want: regularize the weight matrices directly in each gradient step. "
+        "A practical next step is a compact `l2` sweep (for example `1e-5`, `1e-4`, `1e-3`) and side-by-side validation RMSE reporting by segment."
     )
     st.write(
-        "A second enhancement is optimization style. You trained carefully with full-batch logic for transparency, which is excellent for learning and debugging. "
-        "The next step would be mini-batch updates with the same architecture and same segmentation idea. "
-        "That gives faster iteration and often better generalization behavior, while still keeping your model explainable."
+        "A second enhancement area is optimization style. "
+        "The full-batch setup has strong educational value and clear reproducibility; "
+        "the natural extension is mini-batch training with the same architecture and segmentation logic. "
+        "That shift usually improves iteration speed and can improve generalization while preserving explainability."
+    )
+    st.write(
+        "A third enhancement area is diagnostic depth. "
+        "Instead of reporting one aggregate metric only, we can report segmented error behavior, calibration behavior, and confidence behavior together. "
+        "That creates a tighter narrative between data examples, model design, and final interpretation."
     )
 
-    st.markdown("**R snippet: Bayesian + multinomial structure in your Model 2 pipeline**")
+    st.markdown("**R snippet: Bayesian + multinomial structure in Model 2**")
     st.code(
         """library(MCMCpack)
 library(nnet)
@@ -564,13 +567,12 @@ multinom_model <- multinom(
         language="r",
     )
     st.write(
-        "This gives you a nice two-layer R story: Bayesian posterior insight from `MCMCmnl`, and cleaner held-out class prediction behavior from `multinom`. "
-        "From the lecture perspective, that combination is very defensible when you need both interpretability and practical test evaluation."
+        "This creates a useful two-layer R strategy: posterior insight from `MCMCmnl` and clean held-out prediction behavior from `multinom`. "
+        "From a lecture standpoint, this combination is ideal when both interpretability and practical test evaluation are needed."
     )
     st.write(
-        "Where this gets especially useful in your project is the high-price and premium tiers. "
-        "Those classes are smaller and harder, so point estimates alone can be misleading. "
-        "Posterior uncertainty summaries help explain confidence gaps in a way that is much more persuasive for report and presentation discussions."
+        "This is especially valuable in High and Premium tiers, where class counts are smaller and behavior is harder to model. "
+        "Point estimates alone can hide uncertainty in those classes, while posterior summaries make confidence gaps explicit and interpretable."
     )
 
     st.markdown("**How this connects back to Dataset Game Examples**")
@@ -579,6 +581,42 @@ multinom_model <- multinom(
 - In the sample rows, some lower-priced games still show strong engagement or recommendation counts.
 - In premium rows, quality and playtime patterns can look noisier and less frequent.
 - That mismatch is exactly why one global model can underperform and why segmented MLP + Bayesian tier interpretation is a strong hybrid strategy.
+"""
+    )
+    st.write(
+        "That connection matters for storytelling quality. "
+        "When example-level evidence and model-level diagnostics align, conclusions are easier to defend and easier to present."
+    )
+    st.write(
+        "A clear way to structure the enhancement roadmap is to separate near-term changes from medium-term research changes."
+    )
+    st.markdown(
+        """
+**Near-term implementation upgrades**
+- Add mini-batch training while preserving current architecture and segmented split.
+- Add per-segment early-stopping plots and validation tracking.
+- Add compact hyperparameter sweeps for learning rate, hidden width, and L2 weight.
+- Add an explicit model-card summary with assumptions and known failure zones.
+"""
+    )
+    st.markdown(
+        """
+**Medium-term research upgrades**
+- Explore richer feature blocks (developer/publisher effects, release-window context, and genre interactions).
+- Test imbalance-aware objectives for expensive tiers (class-weighted loss, focal variants, and targeted resampling).
+- Add uncertainty comparison panels across neural and Bayesian pipelines.
+- Add sensitivity checks for threshold choices in segmented modeling.
+"""
+    )
+    st.markdown(
+        """
+**Longer-term integration upgrades**
+- Create one reproducible evaluation dashboard that includes:
+  - aggregate regression metrics,
+  - segmented regression metrics,
+  - tier confusion patterns,
+  - calibration and confidence overlays.
+- Add experiment logging so each run records data version, feature set, and parameter configuration.
 """
     )
 
@@ -592,7 +630,12 @@ multinom_model <- multinom(
 """
     )
     st.write(
-        "If you want this tab to read even more like a polished walkthrough, a final enhancement would be adding a small side-by-side chart block: "
-        "left panel for neural metrics by segment and right panel for Bayesian class-wise confidence. "
-        "That would make the improvement path visually obvious and tie your examples, modeling choices, and future plan into one coherent narrative."
+        "A final presentation enhancement is a side-by-side visualization block: "
+        "left panel for neural metrics by segment, right panel for Bayesian confidence by class. "
+        "That layout makes the improvement path visually explicit and ties examples, modeling choices, and future roadmap into one coherent narrative."
+    )
+    st.write(
+        "Overall, the enhancement strategy is not to replace the existing models, but to tighten them. "
+        "The manual segmented MLP remains the core performance engine, and the Bayesian tier model remains the uncertainty-and-interpretation layer. "
+        "The next phase is to make both components more robust, better documented, and easier to compare in a single evaluation view."
     )
