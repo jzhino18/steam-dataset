@@ -342,10 +342,60 @@ Splitting at the median log-price let us train two specialized networks, each fo
     )
     st.markdown(
         """
-- **Why we trained the MLP manually:** manual NumPy training made the learning process transparent. We could inspect gradients, monitor convergence, and diagnose why one global model was missing higher-price behavior.
-- **Why this feature engineering:** we reduced sparsity by keeping the most common genre signals, built `review_ratio` to combine positive/negative feedback robustly, created `engagement` from playtime signals, and used `platform_count` to capture release breadth.
-- **Why 700 epochs with clipping:** the loss curve kept improving over long training, while gradient clipping prevented unstable updates in full-batch optimization.
-- **Why these R libraries:** `MCMCpack` gave Bayesian posterior draws for uncertainty-aware interpretation, `nnet` gave straightforward multinomial predictions for confusion-matrix evaluation, and `ggplot2` supported publication-quality model diagnostics.
+- **Context note:** `nn_mlp.ipynb` and the other reference files were used as lecture-style inspiration only. The final implementation logic shown here reflects your own project design decisions.
+"""
+    )
+
+    st.markdown("**How we designed the manual MLP training**")
+    st.markdown(
+        """
+- We trained the first neural model manually in NumPy to keep every step auditable: initialization, forward pass, backpropagation, and update rules.
+- We selected a single hidden layer with **64 ReLU units** as a deliberate middle ground: expressive enough to model nonlinearity, but still easy to debug and explain.
+- We used a **linear output** because price prediction is a continuous regression problem.
+- We used **full-batch gradient descent** at learning rate `0.001` to produce stable, interpretable learning curves over time.
+- We trained for **700 epochs** because the loss continued to improve well past early epochs, and we wanted convergence behavior to be visible in diagnostics.
+- We applied **gradient clipping at +/-5** to prevent rare unstable updates and keep training numerically controlled.
+"""
+    )
+
+    st.markdown("**Why segmentation became necessary**")
+    st.markdown(
+        """
+- After training one global MLP, residual plots showed a clear pattern: the model struggled differently on cheaper vs. expensive games.
+- That signal suggested two pricing regimes, so we split data at the **median log-price threshold** and trained separate low-price and high-price MLPs.
+- This was a strategic choice, not only a metric trick: each network can specialize in a narrower distribution instead of compromising across the entire market.
+- The combined segmented model then improved overall predictive fit and produced more realistic price-range behavior.
+"""
+    )
+
+    st.markdown("**Feature engineering logic we used**")
+    st.markdown(
+        """
+- We reduced dimensional noise by keeping only the most common genre indicators instead of a very sparse full genre matrix.
+- We built `review_ratio = positive / (positive + negative)` to capture review sentiment in one robust feature, with fallback handling when review counts are zero.
+- We created `engagement` from average and median playtime to summarize long-term usage intensity.
+- We created `platform_count` to represent release breadth across Windows, Mac, and Linux.
+- We kept predictors that have pricing intuition: player interest (`peak_ccu`, `recommendations`), perceived quality (`metacritic_score`, review signals), and game depth (`achievements`, playtime, language coverage).
+"""
+    )
+
+    st.markdown("**Why these R libraries for Model 2**")
+    st.markdown(
+        """
+- `MCMCpack` (specifically `MCMCmnl`) was chosen to estimate **posterior distributions**, so we could discuss uncertainty and direction of effects, not just point predictions.
+- `nnet` (`multinom`) was used for practical test-set classification and confusion-matrix evaluation in a clean, reproducible pipeline.
+- `ggplot2` was used because it makes class imbalance, confusion patterns, and confidence distributions easy to communicate in publication-quality figures.
+- `reshape2` supported reshaping confusion outputs for heatmap-style visualization.
+"""
+    )
+
+    st.markdown("**Training time and implementation summary**")
+    st.markdown(
+        """
+- Manual MLP: trained for 700 epochs on an 80/20 split with scaled features and explicit bias handling.
+- Segmented MLP: two additional 700-epoch models (low-price and high-price regimes) using the same core training routine.
+- Bayesian model: MCMC setup (`mcmc=5000`, `burnin=1000`, `thin=5`) selected to balance posterior stability and runtime.
+- Overall workflow: lecture-inspired foundations, then adapted to the Steam pricing problem through regime-aware architecture and feature decisions.
 """
     )
 
