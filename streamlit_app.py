@@ -164,9 +164,11 @@ def select_price_extreme_examples(df: pd.DataFrame, total_examples: int = 5) -> 
 def show_model1_figures():
     fig_dir = Path("data/model1_figures")
     fig_paths = {
-        "Predicted vs Actual (MLP)": fig_dir / "mlp_pred_vs_actual_scatter.png",
-        "Residuals vs Predicted (MLP)": fig_dir / "mlp_residuals_vs_predicted.png",
-        "Actual vs Predicted Distribution": fig_dir / "mlp_actual_vs_pred_distribution.png",
+        "Model 1 Diagnostics: Predicted vs Actual + Residuals (Single vs Segmented)": fig_dir
+        / "mlp_pred_vs_actual_scatter.png",
+        "Single MLP: Training Loss Over 700 Epochs": fig_dir / "mlp_residuals_vs_predicted.png",
+        "Segmented MLP: Training Loss Over 700 Epochs (Low vs High Price Models)": fig_dir
+        / "mlp_actual_vs_pred_distribution.png",
     }
 
     available = {k: v for k, v in fig_paths.items() if v.exists()}
