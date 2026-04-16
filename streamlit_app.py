@@ -190,7 +190,9 @@ except FileNotFoundError:
     st.error("Could not find `data/steam_clean_v2.csv`. Please add the file and rerun.")
     st.stop()
 
-main_tab, examples_tab = st.tabs(["Main Dashboard", "Dataset Game Examples"])
+main_tab, examples_tab, future_tab = st.tabs(
+    ["Main Dashboard", "Dataset Game Examples", "Future Enhancements + Code Notes"]
+)
 
 with main_tab:
     st.markdown("<h3 class='section-head'>Project Purpose</h3>", unsafe_allow_html=True)
@@ -335,20 +337,28 @@ Splitting at the median log-price let us train two specialized networks, each fo
 """
     )
 
-    st.markdown("<h3 class='section-head'>Implementation Rationale (Bottom Appendix Notes)</h3>", unsafe_allow_html=True)
-    st.write(
-        "These model implementations were built from lecture-inspired methods and then adapted to this Steam dataset, "
-        "rather than copied directly from outside scripts."
-    )
     st.markdown(
-        """
-- **Context note:** `nn_mlp.ipynb` and the other reference files were used as lecture-style inspiration only. The final implementation logic shown here reflects your own project design decisions.
-"""
+        "<h3 class='section-head'>Bottom Appendix Tabs</h3>",
+        unsafe_allow_html=True,
+    )
+    appendix_tab1, appendix_tab2 = st.tabs(
+        ["Implementation Notes", "MLP NN vs Bayesian Nonlinear Use Cases"]
     )
 
-    st.markdown("**How we designed the manual MLP training**")
-    st.markdown(
-        """
+    with appendix_tab1:
+        st.write(
+            "These model implementations were built from lecture-inspired methods and then adapted to this Steam dataset, "
+            "rather than copied directly from outside scripts."
+        )
+        st.markdown(
+            """
+- **Context note:** `nn_mlp.ipynb` and the other reference files were used as lecture-style inspiration only. The final implementation logic shown here reflects your own project design decisions.
+"""
+        )
+
+        st.markdown("**How we designed the manual MLP training**")
+        st.markdown(
+            """
 - We trained the first neural model manually in NumPy to keep every step auditable: initialization, forward pass, backpropagation, and update rules.
 - We selected a single hidden layer with **64 ReLU units** as a deliberate middle ground: expressive enough to model nonlinearity, but still easy to debug and explain.
 - We used a **linear output** because price prediction is a continuous regression problem.
@@ -356,48 +366,85 @@ Splitting at the median log-price let us train two specialized networks, each fo
 - We trained for **700 epochs** because the loss continued to improve well past early epochs, and we wanted convergence behavior to be visible in diagnostics.
 - We applied **gradient clipping at +/-5** to prevent rare unstable updates and keep training numerically controlled.
 """
-    )
+        )
 
-    st.markdown("**Why segmentation became necessary**")
-    st.markdown(
-        """
+        st.markdown("**Why segmentation became necessary**")
+        st.markdown(
+            """
 - After training one global MLP, residual plots showed a clear pattern: the model struggled differently on cheaper vs. expensive games.
 - That signal suggested two pricing regimes, so we split data at the **median log-price threshold** and trained separate low-price and high-price MLPs.
 - This was a strategic choice, not only a metric trick: each network can specialize in a narrower distribution instead of compromising across the entire market.
 - The combined segmented model then improved overall predictive fit and produced more realistic price-range behavior.
 """
-    )
+        )
 
-    st.markdown("**Feature engineering logic we used**")
-    st.markdown(
-        """
+        st.markdown("**Feature engineering logic we used**")
+        st.markdown(
+            """
 - We reduced dimensional noise by keeping only the most common genre indicators instead of a very sparse full genre matrix.
 - We built `review_ratio = positive / (positive + negative)` to capture review sentiment in one robust feature, with fallback handling when review counts are zero.
 - We created `engagement` from average and median playtime to summarize long-term usage intensity.
 - We created `platform_count` to represent release breadth across Windows, Mac, and Linux.
 - We kept predictors that have pricing intuition: player interest (`peak_ccu`, `recommendations`), perceived quality (`metacritic_score`, review signals), and game depth (`achievements`, playtime, language coverage).
 """
-    )
+        )
 
-    st.markdown("**Why these R libraries for Model 2**")
-    st.markdown(
-        """
-- `MCMCpack` (specifically `MCMCmnl`) was chosen to estimate **posterior distributions**, so we could discuss uncertainty and direction of effects, not just point predictions.
-- `nnet` (`multinom`) was used for practical test-set classification and confusion-matrix evaluation in a clean, reproducible pipeline.
-- `ggplot2` was used because it makes class imbalance, confusion patterns, and confidence distributions easy to communicate in publication-quality figures.
-- `reshape2` supported reshaping confusion outputs for heatmap-style visualization.
-"""
-    )
-
-    st.markdown("**Training time and implementation summary**")
-    st.markdown(
-        """
+        st.markdown("**Training time and implementation summary**")
+        st.markdown(
+            """
 - Manual MLP: trained for 700 epochs on an 80/20 split with scaled features and explicit bias handling.
 - Segmented MLP: two additional 700-epoch models (low-price and high-price regimes) using the same core training routine.
-- Bayesian model: MCMC setup (`mcmc=5000`, `burnin=1000`, `thin=5`) selected to balance posterior stability and runtime.
+- Bayesian model: MCMC setup selected to balance posterior stability and runtime.
 - Overall workflow: lecture-inspired foundations, then adapted to the Steam pricing problem through regime-aware architecture and feature decisions.
 """
-    )
+        )
+
+    with appendix_tab2:
+        st.write(
+            "This is the quick practical decision guide for when to prefer an MLP neural network versus a Bayesian nonlinear approach. "
+            "The simplest way to think about it is: MLPs are usually better when your main goal is predictive accuracy at scale, "
+            "while Bayesian nonlinear methods are stronger when uncertainty quantification and interpretability are core requirements."
+        )
+
+        use_case_df = pd.DataFrame(
+            [
+                {
+                    "Typical use case": "Large, noisy datasets with complex interactions",
+                    "MLP NN": "Usually strong fit because it learns nonlinear feature combinations efficiently.",
+                    "Bayesian nonlinear": "Can work, but often heavier computationally.",
+                },
+                {
+                    "Typical use case": "Need calibrated uncertainty for decision risk",
+                    "MLP NN": "Requires extra calibration steps or ensembling.",
+                    "Bayesian nonlinear": "Natural choice because posterior distributions are built in.",
+                },
+                {
+                    "Typical use case": "Explainability for feature-direction confidence",
+                    "MLP NN": "Possible with SHAP/ablation, but less direct.",
+                    "Bayesian nonlinear": "Posterior effects/credible intervals are directly interpretable.",
+                },
+                {
+                    "Typical use case": "Fast deployment and iterative tuning",
+                    "MLP NN": "Very practical with mini-batch training and modern tooling.",
+                    "Bayesian nonlinear": "Often slower to train and tune.",
+                },
+                {
+                    "Typical use case": "Small to medium datasets with class imbalance concerns",
+                    "MLP NN": "Can overfit without strong regularization.",
+                    "Bayesian nonlinear": "Often more robust with priors and uncertainty-aware diagnostics.",
+                },
+            ]
+        )
+        st.dataframe(use_case_df, use_container_width=True, hide_index=True)
+
+        st.markdown(
+            """
+**How this maps to your Steam project**
+- The segmented MLP is a strong performance-oriented model for nonlinear pricing patterns.
+- The Bayesian tier model gives the uncertainty and interpretation layer needed for research storytelling and poster discussion.
+- Using both is a practical hybrid strategy: MLP for prediction strength, Bayesian modeling for uncertainty-aware explanation.
+"""
+        )
 
 with examples_tab:
     st.subheader("Five Dataset Samples from steam_clean_v2.csv")
@@ -445,3 +492,107 @@ with examples_tab:
                 f"This sample has positive reviews `{format_feature_value(row.get('positive'))}` and negative reviews `{format_feature_value(row.get('negative'))}`."
             )
             st.dataframe(build_game_profile_table(row, detail_cols), use_container_width=True, hide_index=True)
+
+with future_tab:
+    st.subheader("Future Enhancements from Lecture Ideas + Code Walkthrough")
+    st.write(
+        "This section is meant to feel like the natural continuation of your `Dataset Game Examples` discussion: "
+        "we looked at concrete rows from the Steam dataset, saw how mixed review profiles and engagement signals vary across price extremes, "
+        "and now we can describe exactly what we would improve next in the modeling workflow."
+    )
+    st.write(
+        "At a high level, your current pipeline is already a strong proof of concept. "
+        "You tested both neural-network and Bayesian approaches, and you surfaced a key market insight: "
+        "Steam pricing behaves like a multi-regime problem, where low-price and premium games often follow different dynamics. "
+        "So the most practical enhancements are not random architecture changes; they are targeted upgrades that improve stability, generalization, and interpretability."
+    )
+    st.write(
+        "The lecture-aligned priority list is: better regularization control, better optimization strategy, and better uncertainty communication. "
+        "That is exactly where your current code is ready to grow."
+    )
+    st.write(
+        "A good first improvement is to tune regularization more systematically. "
+        "You already have L2 integrated in the manual MLP training loop, which is great because it is exactly what helps reduce weight explosion and overfitting in noisy feature spaces. "
+        "In other words, you are already using the right mechanism; now it is mostly about tuning it more intentionally by segment."
+    )
+
+    st.markdown("**Python snippet: L2 regularization in your manual MLP (from Model1 workflow)**")
+    st.code(
+        """def train_manual_mlp_regressor(
+    x_train, y_train, x_val, y_val,
+    hidden1=128, hidden2=64, lr=1e-3, l2=1e-4,
+    epochs=800, batch_size=256, patience=40, seed=42
+):
+    ...
+    gW3 = a2.T @ dy + l2 * params["W3"]
+    gW2 = a1.T @ dz2 + l2 * params["W2"]
+    gW1 = xb.T @ dz1 + l2 * params["W1"]
+    ...""",
+        language="python",
+    )
+    st.write(
+        "Lecture-wise, this is the exact pattern we usually want: regularize the weight matrices directly in each gradient step. "
+        "A practical enhancement is to run a compact sweep on `l2` (for example `1e-5`, `1e-4`, `1e-3`) and compare validation RMSE by segment."
+    )
+    st.write(
+        "A second enhancement is optimization style. You trained carefully with full-batch logic for transparency, which is excellent for learning and debugging. "
+        "The next step would be mini-batch updates with the same architecture and same segmentation idea. "
+        "That gives faster iteration and often better generalization behavior, while still keeping your model explainable."
+    )
+
+    st.markdown("**R snippet: Bayesian + multinomial structure in your Model 2 pipeline**")
+    st.code(
+        """library(MCMCpack)
+library(nnet)
+
+bayes_model <- MCMCmnl(
+  price_tier ~ peak_ccu + recommendations + positive + negative +
+    metacritic_score + achievements + average_playtime_forever + language_count,
+  data = train_df,
+  mcmc = 5000,
+  burnin = 1000,
+  thin = 5,
+  verbose = 0
+)
+
+multinom_model <- multinom(
+  price_tier ~ peak_ccu + recommendations + positive + negative +
+    metacritic_score + achievements + average_playtime_forever + language_count,
+  data = train_df,
+  trace = FALSE
+)""",
+        language="r",
+    )
+    st.write(
+        "This gives you a nice two-layer R story: Bayesian posterior insight from `MCMCmnl`, and cleaner held-out class prediction behavior from `multinom`. "
+        "From the lecture perspective, that combination is very defensible when you need both interpretability and practical test evaluation."
+    )
+    st.write(
+        "Where this gets especially useful in your project is the high-price and premium tiers. "
+        "Those classes are smaller and harder, so point estimates alone can be misleading. "
+        "Posterior uncertainty summaries help explain confidence gaps in a way that is much more persuasive for report and presentation discussions."
+    )
+
+    st.markdown("**How this connects back to Dataset Game Examples**")
+    st.markdown(
+        """
+- In the sample rows, some lower-priced games still show strong engagement or recommendation counts.
+- In premium rows, quality and playtime patterns can look noisier and less frequent.
+- That mismatch is exactly why one global model can underperform and why segmented MLP + Bayesian tier interpretation is a strong hybrid strategy.
+"""
+    )
+
+    st.markdown(
+        """
+**Concrete next enhancements**
+- Move full-batch training to mini-batch updates (same architecture, faster convergence checks).
+- Add early-stopping dashboards by segment (low-price and high-price models shown separately).
+- Expand Bayesian reporting with class-wise posterior uncertainty summaries for High and Premium tiers.
+- Add calibration/uncertainty plots to compare neural confidence versus Bayesian confidence in one panel.
+"""
+    )
+    st.write(
+        "If you want this tab to read even more like a polished walkthrough, a final enhancement would be adding a small side-by-side chart block: "
+        "left panel for neural metrics by segment and right panel for Bayesian class-wise confidence. "
+        "That would make the improvement path visually obvious and tie your examples, modeling choices, and future plan into one coherent narrative."
+    )
